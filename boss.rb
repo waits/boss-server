@@ -16,9 +16,15 @@ def deploy
   config = repos[data['repository']['name']]
   Net::SSH.start(config['host'], config['user'], :keys => [config['key']]) do |ssh|
     if data['ref'] == 'refs/heads/master' and !data['forced'] and data['commits'].length > 0
-      output = ssh.exec! "cd #{config['path']} && git pull origin master && bin/rake assets:precompile && unicornd upgrade"
+      output = ssh.exec! "cd #{config['path']} && git pull origin master && bin/rake assets:precompile"
       puts output
-      if output['Upgrade Complete'] then [200, 'Deploy completed.'] else [500, 'Deploy failed.'] end
+      if config['service'] == 'thin'
+        ssh.exec! "sudo service thin restart"
+        [200, 'Deploy completed.']
+      else
+        output = ssh.exec! "unicornd upgrade"
+        if output['Upgrade Complete'] then [200, 'Deploy completed.'] else [500, 'Deploy failed.'] end
+      end
     else
       [422, 'Payload isn\'t for master or doesn\'t contain any commits.']
     end
